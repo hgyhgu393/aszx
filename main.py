@@ -1,4 +1,4 @@
-import discord  # แก้จาก Import เป็น import
+import discord
 from discord.ext import tasks, commands
 from discord import app_commands
 import aiohttp
@@ -8,12 +8,11 @@ import os
 import re
 from datetime import datetime
 
-# --- [ ส่วนการตั้งค่า ] ---
-# ดึง Token จากระบบ Environment Variable ของ Render (ชื่อ BOT_TOKEN)
+# --- [ ส่วนการตั้งค่าระบบ ] ---
+# โค้ดจะดึงค่าจากช่อง Key ที่ชื่อ BOT_TOKEN ในหน้า Environment ของ Render
 TOKEN = os.getenv('BOT_TOKEN') 
 DB_FILE = 'subscribers.json'
 
-# แหล่งข้อมูลภัยพิบัติไทย
 SOURCES = {
     "กรมอุตุนิยมวิทยา (เตือนภัยพายุ/ฝน)": "https://tmd.go.th/rss/warning.php",
     "ศูนย์เฝ้าระวังแผ่นดินไหว": "https://tmd.go.th/rss/earthquake.php",
@@ -31,17 +30,15 @@ def load_subs():
 def save_subs(subs):
     with open(DB_FILE, 'w') as f: json.dump(subs, f)
 
-# --- [ ระบบวิเคราะห์ข้อความและพิกัด ] ---
+# --- [ ระบบวิเคราะห์ข้อความ ] ---
 def parse_location(text):
     coords = re.findall(r"(\d+\.\d+)", text)
     lat, lon = (coords[0], coords[1]) if len(coords) >= 2 else (None, None)
-    
     area_match = re.search(r"((?:จังหวัด|จ\.)\s*\S+)|((?:อำเภอ|อ\.)\s*\S+)|((?:ตำบล|ต\.)\s*\S+)", text)
     location_summary = text if area_match else "ตรวจสอบรายละเอียดเพิ่มเติมในลิงก์ด้านล่าง"
-        
     return lat, lon, location_summary
 
-# --- [ UI ส่วนของปุ่มกด ] ---
+# --- [ UI ปุ่มกด ] ---
 class AlertView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -52,9 +49,9 @@ class AlertView(discord.ui.View):
         if interaction.user.id not in subs:
             subs.append(interaction.user.id)
             save_subs(subs)
-            await interaction.response.send_message("✅ บอทจะส่งแจ้งเตือนพร้อมแผนที่ให้ในแชทส่วนตัวของคุณทันที!", ephemeral=True)
+            await interaction.response.send_message("✅ บอทจะส่งแจ้งเตือนภัยพิบัติให้ใน DM นะครับ!", ephemeral=True)
         else:
-            await interaction.response.send_message("📢 คุณเปิดรับการแจ้งเตือนไว้อยู่แล้วครับ", ephemeral=True)
+            await interaction.response.send_message("📢 คุณเปิดรับแจ้งเตือนไว้อยู่แล้วครับ", ephemeral=True)
 
     @discord.ui.button(label="🔕 ปิดแจ้งเตือน", style=discord.ButtonStyle.danger, custom_id="unsub_v1")
     async def unsubscribe(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -62,9 +59,7 @@ class AlertView(discord.ui.View):
         if interaction.user.id in subs:
             subs.remove(interaction.user.id)
             save_subs(subs)
-            await interaction.response.send_message("🔕 ยกเลิกการแจ้งเตือนเรียบร้อยแล้ว", ephemeral=True)
-        else:
-            await interaction.response.send_message("❓ คุณไม่ได้เปิดการแจ้งเตือนไว้ตั้งแต่แรกครับ", ephemeral=True)
+            await interaction.response.send_message("🔕 ยกเลิกเรียบร้อยครับ", ephemeral=True)
 
 # --- [ ตัวบอทหลัก ] ---
 class DisasterBot(commands.Bot):
@@ -93,60 +88,41 @@ class DisasterBot(commands.Bot):
                                     self.last_titles.add(entry.title)
                                     await self.broadcast_alert(entry, source_name)
                 except Exception as e:
-                    print(f"Error fetching {source_name}: {e}")
+                    print(f"Error checking {source_name}: {e}")
 
     async def broadcast_alert(self, entry, source_name):
         subs = load_subs()
         lat, lon, area = parse_location(entry.title + " " + entry.description)
-        
-        embed = discord.Embed(
-            title=f"🚨 {source_name}",
-            description=f"**{entry.title}**",
-            color=0xff0000,
-            timestamp=discord.utils.utcnow()
-        )
-        embed.add_field(name="📍 พื้นที่ที่ได้รับผลกระทบ", value=f"```\n{area[:400]}\n```", inline=False)
-        
+        embed = discord.Embed(title=f"🚨 {source_name}", description=f"**{entry.title}**", color=0xff0000, timestamp=discord.utils.utcnow())
+        embed.add_field(name="📍 พื้นที่", value=f"```\n{area[:400]}\n```", inline=False)
         if lat and lon:
-            google_maps_url = f"https://www.google.com/maps/search/?api=1&query={lat},{lon}"
-            embed.add_field(name="🗺️ การนำทาง", value=f"[คลิกเพื่อดูตำแหน่งบน Google Maps]({google_maps_url})", inline=False)
+            embed.add_field(name="🗺️ แผนที่", value=f"[เปิด Google Maps](https://www.google.com/maps/search/?api=1&query={lat},{lon})", inline=False)
             static_map = f"https://www.mapquestapi.com/staticmap/v5/map?locations={lat},{lon}&size=600,400@2x&key=Fmjtd%7Cluurn16zn1%2C22%3Do5-9wt0gu&defaultMarker=marker-ff0000"
             embed.set_image(url=static_map)
-        else:
-            embed.set_thumbnail(url="https://cdn-icons-png.flaticon.com/512/179/179386.png")
-
-        embed.add_field(name="🔗 ข้อมูลต้นทาง", value=f"[อ่านรายละเอียดจากเว็บไซต์]({entry.link})")
-        embed.set_footer(text="ระบบแจ้งเตือนภัยพิบัติฉุกเฉิน (ประเทศไทย)")
-
+        embed.set_footer(text="ระบบแจ้งเตือนภัยพิบัติ (โรงเรียนวังน้อย)")
         for user_id in subs:
             try:
                 user = await self.fetch_user(user_id)
                 await user.send(embed=embed)
-            except:
-                continue
+            except: continue
 
-# --- [ คำสั่งเริ่มต้นระบบ ] ---
 bot = DisasterBot()
 
-@bot.tree.command(name="setup_alert", description="สร้างแผงควบคุมระบบแจ้งเตือนภัยพิบัติ")
-@app_commands.describe(message="ข้อความต้อนรับ", image_url="ลิงก์รูปหน้าปกระบบ")
+@bot.tree.command(name="setup_alert", description="ติดตั้งแผงควบคุมการแจ้งเตือน")
 async def setup_alert(interaction: discord.Interaction, message: str, image_url: str):
     if not interaction.user.guild_permissions.administrator:
-        return await interaction.response.send_message("❌ คุณต้องเป็นแอดมินถึงจะใช้คำสั่งนี้ได้", ephemeral=True)
-    
-    embed = discord.Embed(
-        title="🛰️ ระบบเฝ้าระวังภัยพิบัติแห่งชาติ",
-        description=f"{message}\n\n**สถานะ:** 🟢 กำลังเฝ้าระวังตลอด 24 ชม.",
-        color=0x2b2d31
-    )
+        return await interaction.response.send_message("❌ เฉพาะแอดมินเท่านั้นครับ", ephemeral=True)
+    embed = discord.Embed(title="🛰️ ระบบเฝ้าระวังภัยพิบัติ", description=message, color=0x2b2d31)
     embed.set_image(url=image_url)
-    embed.set_footer(text="กดปุ่มด้านล่างเพื่อรับการแจ้งเตือนทันทีที่มีเหตุการณ์")
-    
     await interaction.channel.send(embed=embed, view=AlertView())
-    await interaction.response.send_message("✅ ติดตั้งระบบเรียบร้อยแล้ว!", ephemeral=True)
+    await interaction.response.send_message("✅ ติดตั้งเรียบร้อย!", ephemeral=True)
 
-# ตรวจสอบว่ามี Token ก่อนรัน
-if TOKEN:
-    bot.run(TOKEN)
-else:
-    print("❌ Error: ไม่พบตัวแปร BOT_TOKEN ใน Environment Variables")
+# --- [ ส่วนเริ่มต้นการทำงาน ] ---
+if __name__ == "__main__":
+    if TOKEN:
+        print("✅ พบ Token แล้ว! กำลังเริ่มรันบอท...")
+        bot.run(TOKEN)
+    else:
+        print("❌ ERROR: บอทหาค่า 'BOT_TOKEN' ไม่เจอ!")
+        print("กรุณาเช็คในหน้า Environment ของ Render ว่าชื่อ Key ตรงกับคำว่า 'BOT_TOKEN' หรือไม่")
+    
