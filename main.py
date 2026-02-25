@@ -9,7 +9,7 @@ import re
 from datetime import datetime
 
 # --- [ ส่วนการตั้งค่า - แทนต้องแก้ตรงนี้ ] ---
-TOKEN = 'MTQyNDcxMjIxMjgyMzU0Mzg1OQ.GKZtgq.8V0pIWNCdJCJ4hR2XCzh1nfMvhTIm_MDqNPoW4'
+TOKEN = 'MTQyNDcxMjIxMjgyMzU0Mzg1OQ.Ge5sX5.1DhVA9zFTFllHqOuCj7q9E9cJE41_RNZRxqjvo'
 DB_FILE = 'subscribers.json'
 
 # แหล่งข้อมูลภัยพิบัติไทย
