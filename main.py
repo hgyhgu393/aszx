@@ -6,10 +6,23 @@ import feedparser
 import json
 import os
 import re
+import threading
+from flask import Flask
 from datetime import datetime
 
-# --- [ ส่วนการตั้งค่าระบบ ] ---
-# โค้ดจะดึงค่าจากช่อง Key ที่ชื่อ BOT_TOKEN ในหน้า Environment ของ Render
+# --- [ ส่วนระบบหลอก Port สำหรับ Render ] ---
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Bot is running!"
+
+def run_web():
+    # Render มักจะใช้พอร์ต 8080 หรือตามที่ระบบกำหนด
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
+
+# --- [ ส่วนการตั้งค่าบอท ] ---
 TOKEN = os.getenv('BOT_TOKEN') 
 DB_FILE = 'subscribers.json'
 
@@ -19,7 +32,6 @@ SOURCES = {
     "ปภ. (ข่าวภัยพิบัติ/น้ำท่วม)": "https://www.disaster.go.th/th/rss/news_disaster.xml"
 }
 
-# --- [ ระบบฐานข้อมูล ] ---
 def load_subs():
     if os.path.exists(DB_FILE):
         try:
@@ -30,7 +42,6 @@ def load_subs():
 def save_subs(subs):
     with open(DB_FILE, 'w') as f: json.dump(subs, f)
 
-# --- [ ระบบวิเคราะห์ข้อความ ] ---
 def parse_location(text):
     coords = re.findall(r"(\d+\.\d+)", text)
     lat, lon = (coords[0], coords[1]) if len(coords) >= 2 else (None, None)
@@ -38,7 +49,6 @@ def parse_location(text):
     location_summary = text if area_match else "ตรวจสอบรายละเอียดเพิ่มเติมในลิงก์ด้านล่าง"
     return lat, lon, location_summary
 
-# --- [ UI ปุ่มกด ] ---
 class AlertView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -61,7 +71,6 @@ class AlertView(discord.ui.View):
             save_subs(subs)
             await interaction.response.send_message("🔕 ยกเลิกเรียบร้อยครับ", ephemeral=True)
 
-# --- [ ตัวบอทหลัก ] ---
 class DisasterBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
@@ -112,17 +121,27 @@ bot = DisasterBot()
 async def setup_alert(interaction: discord.Interaction, message: str, image_url: str):
     if not interaction.user.guild_permissions.administrator:
         return await interaction.response.send_message("❌ เฉพาะแอดมินเท่านั้นครับ", ephemeral=True)
+    
+    # ตรวจสอบเบื้องต้นว่า image_url เป็นลิงก์หรือไม่
+    if not image_url.startswith("http"):
+        return await interaction.response.send_message("❌ รูปแบบลิงก์รูปภาพไม่ถูกต้องครับ ต้องขึ้นต้นด้วย http หรือ https", ephemeral=True)
+
     embed = discord.Embed(title="🛰️ ระบบเฝ้าระวังภัยพิบัติ", description=message, color=0x2b2d31)
     embed.set_image(url=image_url)
-    await interaction.channel.send(embed=embed, view=AlertView())
-    await interaction.response.send_message("✅ ติดตั้งเรียบร้อย!", ephemeral=True)
+    try:
+        await interaction.channel.send(embed=embed, view=AlertView())
+        await interaction.response.send_message("✅ ติดตั้งเรียบร้อย!", ephemeral=True)
+    except Exception as e:
+        await interaction.response.send_message(f"❌ เกิดข้อผิดพลาด: {e}", ephemeral=True)
 
 # --- [ ส่วนเริ่มต้นการทำงาน ] ---
 if __name__ == "__main__":
+    # รัน Web Server แยก Thread
+    threading.Thread(target=run_web).start()
+    
     if TOKEN:
         print("✅ พบ Token แล้ว! กำลังเริ่มรันบอท...")
         bot.run(TOKEN)
     else:
         print("❌ ERROR: บอทหาค่า 'BOT_TOKEN' ไม่เจอ!")
-        print("กรุณาเช็คในหน้า Environment ของ Render ว่าชื่อ Key ตรงกับคำว่า 'BOT_TOKEN' หรือไม่")
-    
+
