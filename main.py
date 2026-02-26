@@ -10,19 +10,19 @@ import threading
 from flask import Flask
 from datetime import datetime
 
-# --- [ ส่วนระบบหลอก Port สำหรับ Render ] ---
+# --- [ 1. ระบบ Flask สำหรับเปิด Port ให้ UptimeRobot ] ---
 app = Flask('')
 
 @app.route('/')
 def home():
-    return "Bot is running!"
+    return "Bot is Online and Ready!"
 
 def run_web():
-    # Render มักจะใช้พอร์ต 8080 หรือตามที่ระบบกำหนด
+    # ดึงค่า Port จาก Render (ปกติคือ 8080 หรือตามที่ระบบกำหนด)
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port)
 
-# --- [ ส่วนการตั้งค่าบอท ] ---
+# --- [ 2. การตั้งค่าบอทเดิมของแทน ] ---
 TOKEN = os.getenv('BOT_TOKEN') 
 DB_FILE = 'subscribers.json'
 
@@ -122,9 +122,8 @@ async def setup_alert(interaction: discord.Interaction, message: str, image_url:
     if not interaction.user.guild_permissions.administrator:
         return await interaction.response.send_message("❌ เฉพาะแอดมินเท่านั้นครับ", ephemeral=True)
     
-    # ตรวจสอบเบื้องต้นว่า image_url เป็นลิงก์หรือไม่
     if not image_url.startswith("http"):
-        return await interaction.response.send_message("❌ รูปแบบลิงก์รูปภาพไม่ถูกต้องครับ ต้องขึ้นต้นด้วย http หรือ https", ephemeral=True)
+        return await interaction.response.send_message("❌ ลิงก์รูปภาพไม่ถูกต้อง", ephemeral=True)
 
     embed = discord.Embed(title="🛰️ ระบบเฝ้าระวังภัยพิบัติ", description=message, color=0x2b2d31)
     embed.set_image(url=image_url)
@@ -134,9 +133,9 @@ async def setup_alert(interaction: discord.Interaction, message: str, image_url:
     except Exception as e:
         await interaction.response.send_message(f"❌ เกิดข้อผิดพลาด: {e}", ephemeral=True)
 
-# --- [ ส่วนเริ่มต้นการทำงาน ] ---
+# --- [ 3. ส่วนเริ่มรันระบบทั้งหมด ] ---
 if __name__ == "__main__":
-    # รัน Web Server แยก Thread
+    # สั่งให้ Web Server (Flask) ทำงานแยก Thread เพื่อไม่ให้กวนการรันบอท
     threading.Thread(target=run_web).start()
     
     if TOKEN:
@@ -144,4 +143,4 @@ if __name__ == "__main__":
         bot.run(TOKEN)
     else:
         print("❌ ERROR: บอทหาค่า 'BOT_TOKEN' ไม่เจอ!")
-
+    
